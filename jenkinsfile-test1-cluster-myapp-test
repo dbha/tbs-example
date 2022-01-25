@@ -1,0 +1,152 @@
+//Setting Parameter
+properties ([
+	parameters ([
+		string(name: 'APP_NAME', defaultValue: 'myapp-test', description: '', trim: true),
+		string(name: 'NAMESPACE', defaultValue: 'myapp-test', description: '', trim: true),
+		string(name: 'GIT_URL', defaultValue: 'https://github.com/dbha/myapp-test.git', description: '', trim: true),
+		string(name: 'CLUSTER_BUILDER', defaultValue: 'my-java-clusterbuilder1', description: '', trim: true),
+        string(name: 'BRANCH_NAME', defaultValue: 'master', description: '', trim: true),
+		string(name: 'IMAGE_TAG', defaultValue: 'harbor.lab.pksdemo.net/tanzu/apps/myapp-test', description: '', trim: true),
+	])
+])
+
+pipeline {
+
+    agent {
+        kubernetes {
+            defaultContainer 'jnlp'
+            yaml """
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+     app.kubernetes.io/name: jenkins-build
+     app.kubernetes.io/component: jenkins-build
+     app.kubernetes.io/version: "1"
+spec:
+  volumes:
+  - name: secret-volume
+    secret:
+      secretName: test-cluster1-kubeconfig-secret
+  containers:
+  - name: k8s
+    image: harbor.lab.pksdemo.net/library/docker-build
+    command:
+    - sleep
+    env:
+      - name: KUBECONFIG
+        value: "/tmp/config/test-cluster1-kubeconfig-sa"
+    volumeMounts:
+    - name: secret-volume
+      readOnly: true
+      mountPath: "/tmp/config"
+    args:
+    - infinity
+"""
+        }
+    }
+
+    stages {
+
+/*
+        stage('Initialize the variables') {
+            steps{
+                script{
+                    APP_NAME="myapp-test"
+                    NAMESPACE="myapp-test"
+                    GIT_URL="https://github.com/dbha/myapp-test.git"
+                    CLUSTER_BUILDER="default"
+                    BRANCH_NAME="master"
+                    IMAGE_TAG="harbor.lab.pksdemo.net/tanzu/apps/myapp-test"
+                }
+            }
+        }       
+*/
+        stage('Fetch from GitHub') {
+            steps {
+                dir("app"){
+                    git(
+                        poll: true,
+                        changelog: true,
+                        branch: "${BRANCH_NAME}",
+                        credentialsId: "git-jenkins",
+                        url: "${GIT_URL}"
+                    )
+                    sh 'git rev-parse HEAD > git-commit.txt'
+                }
+            }
+        }
+
+        stage('Create Image') {
+            steps {
+                container('k8s') {
+                    sh '''#!/bin/sh -e
+                        export GIT_COMMIT=$(cat app/git-commit.txt)
+                        echo "kp image save....." 
+
+                        kp image save -n "${NAMESPACE}" "${APP_NAME}" \
+                            --git "${GIT_URL}" \
+                            --cluster-builder "${CLUSTER_BUILDER}" \
+                            --tag "${IMAGE_TAG}" \
+                            --env BP_GRADLE_BUILD_ARGUMENTS='--no-daemon build' \
+                            --git-revision ${GIT_COMMIT} -w
+                    '''
+                }
+            }
+        }
+
+        stage('Update Deployment Manifest'){
+            steps {
+                container('k8s'){
+                    sh '''#!/bin/sh -e
+                        ls -alrt
+                    '''
+                    dir("gitops"){
+                        git(
+                            poll: false,
+                            changelog: false,
+                            branch: "${BRANCH_NAME}",
+                            credentialsId: "jenkins-ssh-private-key",
+                            url: "git@github.com:dbha/myapp-test-gitops.git"
+                        )
+                    }
+                    sshagent(credentials: ['jenkins-ssh-private-key']){
+                        sh '''#!/bin/sh -e
+                        echo "sshagent"
+                        kubectl get image "${APP_NAME}" -n "${NAMESPACE}" -o json | jq -r .status.latestImage >> version.txt
+                        export VERSION=$(cat version.txt)
+                        kubectl get po -A
+                        pwd
+                        cd gitops/app/"${NAMESPACE}"
+                        pwd
+                        kustomize edit set image "${APP_NAME}"=${VERSION}
+                        export GIT_SSH_COMMAND="ssh -oStrictHostKeyChecking=no"
+                        git config --global user.name "dbha"
+                        git config --global user.email "dbha0719@gmail.com"
+                        git add .
+                        mkdir -p ~/.ssh
+                        git diff-index --quiet HEAD || git commit -m "Update by CI"
+                        ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+                        git pull -r origin master
+                        pwd;ls -alrt
+                        git push --set-upstream origin master
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Deploy Service to Cluster') {
+            steps {
+                container('k8s'){
+                  dir("gitops"){
+                    sh '''#!/bin/sh -e
+                    cd app
+                    kubectl apply -k ./"${APP_NAME}"
+                    '''
+                  }
+                }
+            }
+        }
+    }
+}
