@@ -536,7 +536,8 @@
     - create credentials for git token
     .....
 
-## Create Jenkins Pipeline & Build & deploy without argocd
+## Create Jenkins Pipeline & Build & deploy without argocd     
+   -> In pipeline script(jenkinsfile-test1-cluster-myapp-test), there is deploy command like "kubectl apply -k.."
 
 1) Configure via Jenkins UI    
     ![](./images/general.png)
@@ -573,7 +574,8 @@
     Spring Boot dha TEST11%
      
 
-## Create Jenkins Pipeline & Build & deploy with argocd     
+## Create Jenkins Pipeline & Build & deploy with argocd   
+   -> In pipeline script(jenkinsfile-test1-cluster-myapp-test-gitops), there is no deploy command.   
 
 1) Register test-cluster1 to deploy app via argocd cli
 ##
