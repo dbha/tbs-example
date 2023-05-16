@@ -6,7 +6,7 @@ properties ([
 		string(name: 'GIT_URL', defaultValue: 'https://github.com/dbha/myapp-test.git', description: '', trim: true),
 		string(name: 'CLUSTER_BUILDER', defaultValue: 'my-java-clusterbuilder1', description: '', trim: true),
         string(name: 'BRANCH_NAME', defaultValue: 'master', description: '', trim: true),
-		string(name: 'IMAGE_TAG', defaultValue: 'harbor.lab.pksdemo.net/tanzu/apps/myapp-test', description: '', trim: true),
+		string(name: 'IMAGE_TAG', defaultValue: 'tkg-harborplf.dha-tkgdemo.net/tanzu/apps/myapp-test', description: '', trim: true),
 	])
 ])
 
@@ -27,15 +27,15 @@ spec:
   volumes:
   - name: secret-volume
     secret:
-      secretName: test-cluster1-kubeconfig-secret
+      secretName: test-cluster-kubeconfig-secret
   containers:
   - name: k8s
-    image: harbor.lab.pksdemo.net/library/docker-build
+    image: tkg-harborplf.dha-tkgdemo.net/library/docker-build
     command:
     - sleep
     env:
       - name: KUBECONFIG
-        value: "/tmp/config/test-cluster1-kubeconfig-sa"
+        value: "/tmp/config/test-cluster-kubeconfig-secret"
     volumeMounts:
     - name: secret-volume
       readOnly: true
