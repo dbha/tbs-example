@@ -27,7 +27,7 @@ spec:
   volumes:
   - name: secret-volume
     secret:
-      secretName: test-cluster-kubeconfig-secret
+      secretName: tkg220-full-cluster-kubeconfig-secret
   containers:
   - name: k8s
     image: harborplf.dha-tkgdemo.net/library/dbha/docker-build:latest
@@ -35,7 +35,7 @@ spec:
     - sleep
     env:
       - name: KUBECONFIG
-        value: "/tmp/config/test-cluster-kubeconfig"
+        value: "/tmp/config/tkg220-full-cluster-kubeconfig"
     volumeMounts:
     - name: secret-volume
       readOnly: true
